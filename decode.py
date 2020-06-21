@@ -117,10 +117,11 @@ class BeamSearchDecoder(object):
       except ValueError:
         decoded_words = decoded_words
       decoded_output = ' '.join(decoded_words) # single string
-      summarize_texted=self.summarize_texted(self._hps,original_article,decoded_output,self._vocab,my_embedding)
-
+      original_article_ex_list_text=self.get_decoded_article(original_article,decoded_output)
+      summarize_texted_word=self.summarize_texted(self._hps,original_article_ex_list_text,decoded_output,self._vocab,my_embedding)
+       #original_article_ex_list_text is original sentence word,decoded_output is decode sentence
       if FLAGS.single_pass:
-        self.write_for_rouge(original_abstract_sents, decoded_words, counter) # write ref summary and decoded summary to file, to eval with pyrouge later
+        self.write_for_rouge(original_abstract_sents, summarize_texted_word, counter) # write ref summary and decoded summary to file, to eval with pyrouge later
         counter += 1 # this is how many examples we've decoded
       else:
         print_results(article_withunks, abstract_withunks, decoded_output) # log output to screen
@@ -132,14 +133,35 @@ class BeamSearchDecoder(object):
           tf.logging.info('We\'ve been decoding with same checkpoint for %i seconds. Time to load new checkpoint', t1-t0)
           _ = util.load_ckpt(self._saver, self._sess)
           t0 = time.time()
+  def get_decoded_article(self,original_article,decoded_output):#select original sentence which include decoded_output word
+      original_article_list=re.split(r'[.]', original_article.strip())#list. strip article in '.'
+      original_article_ex_list=[]
+      decoded_output_list_decode_word=[]
+      decoded_output_list_decode=re.split(r'[.]', decoded_output.strip())#list. strip decoded_output in '.'
+      for line_ori in decoded_output_list_decode:  #divide decoded_output into a sentence list
+        line_seg_ori=line_ori.split()
+        decoded_output_list_decode_word.append(line_seg_ori)
+      
+      for ori_line in original_article_list:#select a sentence in original article
+        for decode_line in decoded_output_list_decode_word:
+          for decode_str in decode_line:
+              line_ori_answer=decode_str in ori_line#bool.Is there a decode_str in ori_line
+              if line_ori_answer is True:
+                  ex_answer=ori_line in original_article_ex_list#bool.Is there a ori_line in original_article_ex_list
+                  if ex_answer is False:
+                     original_article_ex_list.append(ori_line)
+                  break
+      original_article_ex_list_text=". ".join(original_article_ex_list)  #str       
+      return original_article_ex_list_text
+
 
   def summarize_texted(self,hps,original_article,decoded_output,vocab,my_embedding):
       ckpt_file_name ='/home/ddd/data/cnndailymail3/finished_files/exp_logs/train/model.ckpt-33831'#model name
       name_variable_to_restore='seq2seq/embedding/embedding'#variable name
       decoded_output_list=re.split(r'[.]', decoded_output.strip())
       top_n=len(decoded_output_list)
-      original_article_my=original_article.strip(string.punctuation) 
-      decoded_output_my=decoded_output.strip(string.punctuation) 
+      original_article_my=original_article.strip(string.punctuation) #Remove the punctuation at the end of the sentence
+      decoded_output_my=decoded_output.strip(string.punctuation) #Remove the punctuation at the end of the sentence
       decoded_output_my_str=original_article_my+'.'+decoded_output_my
       
 
@@ -227,7 +249,8 @@ class BeamSearchDecoder(object):
           # print("lllaaaaaa\n",summarize_texted)
       
       summarize_texted,sentences=generate_summary(self,decoded_output_my_str,top_n,ckpt_file_name,name_variable_to_restore,vocab,my_embedding)
-      return summarize_texted
+      summarize_texted_word=summarize_texted.split()#list
+      return summarize_texted_word
 
 
 
